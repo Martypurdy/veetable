@@ -145,7 +145,7 @@ input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-vis
 @media (max-width:900px){.lower{grid-template-columns:minmax(0,1fr)}}
 .card{padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
 .notes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
-.notes li{display:flex;gap:10px;font-size:14.5px;align-items:flex-start}
+.notes li{display:flex;gap:10px;font-size:14px;line-height:1.45;align-items:flex-start}
 .dot{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;color:var(--surface);margin-top:1px}
 .dot.ok{background:var(--ok)}.dot.info{background:var(--info)}.dot.warn{background:var(--warn)}.dot.error{background:var(--err)}
 details.how{border-top:1px solid var(--line);padding-top:12px}
@@ -318,26 +318,23 @@ footer{font-size:13px;color:var(--muted);max-width:90ch}
       </section>
       <dl class="kpis" id="kpis"></dl>
       <section class="panel details" aria-label="Measurements"><table id="details"></table></section>
+      <section class="panel card" aria-labelledby="notesH">
+        <h2 id="notesH">Layout notes</h2>
+        <ul class="notes" id="notes"></ul>
+        <details class="how">
+          <summary>How the VeeTable system fits together</summary>
+          <ul class="rules">
+            <li><b>64 mm Vee grid.</b> Every Vee is 90°, 4 mm deep and 8 mm wide at the surface. Bins sit on whole 64 mm cells.</li>
+            <li><b>96 mm dog holes.</b> 96 mm is 1.5 cells, so holes alternate between a Vee line and a cell centre. The two patterns line up every 192 mm.</li>
+            <li><b>Centred holes.</b> A cell count divisible by 3 (6, 9, 12, 18…) can't centre the most holes, so one side ends up half a cell further in. Go one cell up or down, or choose "Always centred".</li>
+            <li><b>Holes stay inside the frame.</b> No hole centre is closer than 32 mm to the outer Vee.</li>
+            <li><b>Cut order.</b> Drill the dog holes and fixing holes first, then cut the Vees.</li>
+          </ul>
+        </details>
+      </section>
     </div>
   </div>
 
-  <div class="lower">
-    <section class="panel card" aria-labelledby="notesH">
-      <h2 id="notesH">Layout notes</h2>
-      <ul class="notes" id="notes"></ul>
-      <details class="how">
-        <summary>How the VeeTable system fits together</summary>
-        <ul class="rules">
-          <li><b>64 mm Vee grid.</b> Every Vee is 90°, 4 mm deep and 8 mm wide at the surface. Bins sit on whole 64 mm cells.</li>
-          <li><b>96 mm dog holes.</b> 96 mm is 1.5 cells, so holes alternate between a Vee line and a cell centre. The two patterns line up every 192 mm.</li>
-          <li><b>Centred holes.</b> A cell count divisible by 3 (6, 9, 12, 18…) can't centre the most holes, so one side ends up half a cell further in. Go one cell up or down, or choose "Always centred".</li>
-          <li><b>Holes stay inside the frame.</b> No hole centre is closer than 32 mm to the outer Vee.</li>
-          <li><b>Cut order.</b> Drill the dog holes and fixing holes first, then cut the Vees.</li>
-        </ul>
-      </details>
-    </section>
-
-  </div>
 
   <section class="counter" id="counter" hidden aria-label="Site counter">
     <div><b id="c-visits">—</b><span>visits</span></div>
