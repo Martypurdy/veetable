@@ -132,6 +132,8 @@ input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-vis
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .sw{width:14px;height:14px;border-radius:4px;display:inline-block}
 .viewer{position:relative;background:var(--sunk);border-radius:12px;overflow:hidden}
+.sidebadge{position:absolute;left:10px;top:10px;font-size:12.5px;font-weight:700;letter-spacing:.02em;padding:5px 10px;border-radius:999px;background:var(--stand);color:#fff;pointer-events:none}
+.sidebadge[hidden]{display:none}
 .preview{padding:10px;touch-action:none;cursor:zoom-in;outline:none;border-radius:12px}
 .preview:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
 .preview.zoomed{cursor:grab}.preview.dragging{cursor:grabbing}
@@ -145,6 +147,10 @@ input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-vis
 .viewhint{position:absolute;left:10px;bottom:10px;font-size:12.5px;color:var(--muted);pointer-events:none;max-width:calc(100% - 200px)}
 @media (max-width:560px){.viewhint{display:none}}
 .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sides{flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+.sides[hidden]{display:none}
+.sides-lbl{font-size:13px;font-weight:600;color:var(--muted)}
+.sides .seg{width:auto;flex:1 1 300px;max-width:420px}
 .btn{font:inherit;font-weight:650;font-size:14.5px;border-radius:10px;padding:9px 16px;min-height:42px;cursor:pointer;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .btn.ghost{border-color:transparent;background:transparent;color:var(--muted);padding-inline:10px}
@@ -409,6 +415,7 @@ dialog.legal::backdrop{background:rgba(10,12,16,.55)}
         <div class="viewer">
           <div class="preview" id="preview" tabindex="0" aria-label="Table preview. Use plus and minus to zoom and the arrow keys to move around."></div>
           <div class="coords" id="coords" hidden></div>
+          <div class="sidebadge" id="sideBadge" hidden></div>
           <div class="viewhint" id="viewhint">Scroll or pinch to zoom · drag to move · double-click to zoom in</div>
           <div class="zoombar" role="group" aria-label="Zoom">
             <button type="button" id="zOut" aria-label="Zoom out">−</button>
@@ -419,6 +426,14 @@ dialog.legal::backdrop{background:rgba(10,12,16,.55)}
         </div>
         <div class="actions">
           <label class="fname"><span>File name</span><input id="fname" autocomplete="off" spellcheck="false"></label>
+          <div class="sides" id="sidesBox" hidden>
+            <span class="sides-lbl" id="sidesLbl">Vector files for</span>
+            <div class="seg" role="radiogroup" aria-labelledby="sidesLbl">
+              <input type="radio" name="sides" id="sd-both" value="both" checked><label for="sd-both">Both sides</label>
+              <input type="radio" name="sides" id="sd-top" value="top"><label for="sd-top">Top</label>
+              <input type="radio" name="sides" id="sd-under" value="under"><label for="sd-under">Underside</label>
+            </div>
+          </div>
           <button class="btn primary" id="dlDxf" type="button">Download DXF</button>
           <button class="btn" id="dlSvg" type="button">SVG</button>
           <button class="btn" id="dlPdf" type="button">Cutting sheets (PDF)</button>
@@ -1385,7 +1400,8 @@ function previewSVG(R){
   g+=`<path d="${o}" fill="none" stroke="var(--ply-edge)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
   for(const h of R.holes)g+=`<circle cx="${r4(h[0])}" cy="${r4(Y(h[1]))}" r="${HOLE_D/2}" fill="var(--hole)"/>`;
   for(const sl of R.slots||[])g+=`<rect x="${r4(sl.x1)}" y="${r4(Y(sl.y2))}" width="${SLOT_L}" height="${SLOT_W}" rx="${sl.r}" fill="var(--hole)"/>`;
-  if(R.stand)for(const hd of R.stand.heads)g+=`<path d="M${hd.poly.map(([x,y])=>r4(x)+' '+r4(Y(y))).join('L')}Z" fill="var(--stand)" fill-opacity=".2" stroke="var(--stand)" stroke-width="1.6" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/>`;
+  const under=R.side==='under';   // underside view: the pockets are on the face you're looking at, so draw them solid
+  if(R.stand)for(const hd of R.stand.heads)g+=`<path d="M${hd.poly.map(([x,y])=>r4(x)+' '+r4(Y(y))).join('L')}Z" fill="var(--stand)" fill-opacity="${under?.35:.2}" stroke="var(--stand)" stroke-width="1.6"${under?'':' stroke-dasharray="6 4"'} vector-effect="non-scaling-stroke"/>`;
   if(R.s.pocket)for(const f of R.fixes)g+=`<circle cx="${r4(f[0])}" cy="${r4(Y(f[1]))}" r="${R.s.pocketD/2}" fill="var(--fix)" fill-opacity=".35" stroke="var(--fix)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
   for(const f of R.fixes)g+=`<circle cx="${r4(f[0])}" cy="${r4(Y(f[1]))}" r="${R.s.fixD/2}" fill="var(--fix)"/>`;
   const dy=D+pad*.55,dx=-pad*.55,tk=pad*.14,ln=(a,b,c,d)=>`<line x1="${r4(a)}" y1="${r4(b)}" x2="${r4(c)}" y2="${r4(d)}"/>`;
@@ -1399,10 +1415,24 @@ function previewSVG(R){
 // Layer name carries the pocket depth so it's clear in VCarve, e.g. FIX_POCKETS_11MM_DEEP
 const STAND_LAYER='UNDERSIDE_STAND_POCKETS_5MM_DEEP';
 const pocketLayer=s=>'FIX_POCKETS_'+(S.unit==='in'?String(Math.round(s.pocketDepth/IN*1000)/1000).replace('.','P')+'IN':String(Math.round(s.pocketDepth*10)/10).replace('.','P')+'MM')+'_DEEP';
+// Which side a vector file is for. Top: everything cut from the face. Underside: the board turned over side to side,
+// so x is mirrored; it carries the stand pockets plus the outline and through-cuts for lining the sheet up.
+const sideChoice=()=>R&&R.stand?(document.querySelector('input[name="sides"]:checked')||{}).value||'both':'both';
+const SIDE_NOTE={both:'',top:'TOP side only.',under:'UNDERSIDE: board turned over side to side (mirrored left to right). Measure from the new front-left corner. Outline, holes and handle slot are for lining up only.'};
+function forSide(R,side){
+  if(side==='top')return {...R,stand:null,side};
+  if(side!=='under')return {...R,side:'both'};
+  const M=x=>R.W-x;
+  return {...R,side,s:{...R.s,pocket:false},lines:[],corners:[],
+    holes:R.holes.map(([x,y])=>[M(x),y]),fixes:R.fixes.map(([x,y])=>[M(x),y]),
+    slots:(R.slots||[]).map(q=>({...q,x1:M(q.x2),x2:M(q.x1)})),
+    stand:{...R.stand,heads:R.stand.heads.map(hd=>({...hd,x:M(hd.x),poly:hd.poly.map(([x,y])=>[M(x),y])}))}};
+}
 function exportSVG(R){
   const k=S.unit==='in'?1/IN:1,u=S.unit==='in'?'in':'mm',W=r4(R.W*k),D=r4(R.D*k),X=v=>r4(v*k),Y=y=>r4((R.D-y)*k);
   let o=`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}${u}" height="${D}${u}" viewBox="0 0 ${W} ${D}">\n`;
   o+=`<!-- VeeTable. Free for personal, non-commercial use under CC BY-NC-SA 4.0. -->\n`;
+  if(SIDE_NOTE[R.side])o+=`<!-- ${SIDE_NOTE[R.side]} -->\n`;
   o+=`<!-- VeeTable ${L(R.W,true)} x ${L(R.D,true)} | ${R.cx} x ${R.cy} cells @ 64 mm | Vee 90deg x 4 mm | ${R.holes.length} dog holes D20 @ 96 mm | units: ${u} -->\n`;
   o+=`<g id="OUTLINE" fill="none" stroke="#000000" stroke-width="${X(.2)}"><path d="${outlinePath(W,D,R.s.corner,X(R.cs))}"/></g>\n<g id="V_GROOVES" fill="none" stroke="#0000FF" stroke-width="${X(.2)}">\n`;
   for(const l of R.lines)o+=`<line x1="${X(l[0])}" y1="${Y(l[1])}" x2="${X(l[2])}" y2="${Y(l[3])}"/>\n`;
@@ -1412,7 +1442,7 @@ function exportSVG(R){
   for(const h of R.holes)o+=`<circle cx="${X(h[0])}" cy="${Y(h[1])}" r="${X(HOLE_D/2)}"/>\n`;
   o+=`</g>\n<g id="FIXINGS" fill="none" stroke="#008000" stroke-width="${X(.2)}">\n`;
   for(const f of R.fixes)o+=`<circle cx="${X(f[0])}" cy="${Y(f[1])}" r="${X(R.s.fixD/2)}"/>\n`;
-  if(R.stand){o+=`</g>\n<!-- Underside: drawn as seen from the top. Mirror the way you flip the board. -->\n<g id="${STAND_LAYER}" fill="none" stroke="#7A3FB0" stroke-width="${X(.2)}">\n`;for(const hd of R.stand.heads)o+=`<path d="M${hd.poly.map(([x,y])=>X(x)+' '+Y(y)).join('L')}Z"/>\n`}
+  if(R.stand){o+=`</g>\n${R.side==='under'?'':'<!-- Underside: drawn as seen from the top. Mirror the way you flip the board. -->\n'}<g id="${STAND_LAYER}" fill="none" stroke="#7A3FB0" stroke-width="${X(.2)}">\n`;for(const hd of R.stand.heads)o+=`<path d="M${hd.poly.map(([x,y])=>X(x)+' '+Y(y)).join('L')}Z"/>\n`}
   if(R.s.pocket){o+=`</g>\n<g id="${pocketLayer(R.s)}" fill="none" stroke="#008080" stroke-width="${X(.2)}">\n`;for(const f of R.fixes)o+=`<circle cx="${X(f[0])}" cy="${Y(f[1])}" r="${X(R.s.pocketD/2)}"/>\n`}
   return o+`</g>\n</svg>\n`;
 }
@@ -1437,7 +1467,7 @@ function exportDXF(R){
   if(R.s.pocket)for(const f of R.fixes)circ(pocketLayer(R.s),4,v(f[0]),v(f[1]),v(R.s.pocketD/2));
   if(R.stand)for(const hd of R.stand.heads)e.push(`0\nPOLYLINE\n8\n${STAND_LAYER}\n62\n200\n66\n1\n70\n1\n10\n0\n20\n0\n30\n0\n`+hd.poly.map(([x,y])=>`0\nVERTEX\n8\n${STAND_LAYER}\n10\n${v(x)}\n20\n${v(y)}\n30\n0`).join('\n')+`\n0\nSEQEND\n8\n${STAND_LAYER}`);
   const layer=(n,col)=>`0\nLAYER\n2\n${n}\n70\n0\n62\n${col}\n6\nCONTINUOUS`;
-  return ['999\nVeeTable. Free for personal, non-commercial use under CC BY-NC-SA 4.0.\n0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n9\n$INSUNITS\n70\n'+(S.unit==='in'?1:4)+'\n9\n$EXTMIN\n10\n0\n20\n0\n9\n$EXTMAX\n10\n'+r4(W)+'\n20\n'+r4(D)+'\n0\nENDSEC',
+  return ['999\nVeeTable. Free for personal, non-commercial use under CC BY-NC-SA 4.0.\n'+(SIDE_NOTE[R.side]?'999\n'+SIDE_NOTE[R.side]+'\n':'')+'0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n9\n$INSUNITS\n70\n'+(S.unit==='in'?1:4)+'\n9\n$EXTMIN\n10\n0\n20\n0\n9\n$EXTMAX\n10\n'+r4(W)+'\n20\n'+r4(D)+'\n0\nENDSEC',
     '0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n8\n'+[layer('OUTLINE',7),layer('V_GROOVES',5),layer('V_CORNERS',94),layer('HANDLES',30),layer('DOG_HOLES',1),layer('FIXINGS',3),layer(pocketLayer(R.s),4),layer(STAND_LAYER,200)].join('\n')+'\n0\nENDTAB\n0\nENDSEC',
     '0\nSECTION\n2\nENTITIES\n'+e.join('\n')+'\n0\nENDSEC','0\nEOF'].join('\n')+'\n';
 }
@@ -1453,7 +1483,7 @@ s.holes?`Dog holes: ${R.holes.length} (${R.ax.n} x ${R.ay.n}), 20 mm at 96 mm ce
 s.fix?`Fixing holes: ${R.fixes.length} x ${L(s.fixD)} through (${s.fixNX||2} along front and back, ${s.fixNY||2} along each side, evenly spaced), ${L(s.fixX)} from the sides and ${L(s.fixY)} from the front and back (layer FIXINGS). Check against your frame.`:'Fixing holes: none',
 (R.slots||[]).length?`Handle slot${R.slots.length>1?'s':''}: ${L(SLOT_L)} x ${L(SLOT_W)} with round ends, ${L(SLOT_EDGE)} in from the ${{back:'back edge',front:'front edge',both:'front and back edges'}[s.handlePos||'back']}, centred, cut right through (layer HANDLES, profile inside the line).`:'',
 R.stand?`Centipede stand pockets (2' x 4' stand, 6 heads): 6 pockets, ${STAND.depth} mm deep, on the UNDERSIDE (layer ${STAND_LAYER}). Head centres ${L(R.stand.left)} from the left edge and ${L(R.stand.front)} from the front, ${L(R.stand.sx)} apart across and ${L(R.stand.sy)} along.`:'',
-R.stand?`Underside: the pockets are drawn as seen from the top, through the board. Cut them first, then flip the board and cut the top. In your CAM, mirror the pocket layer the same way you flip the board (left-right flip: mirror left-right; front-back flip: mirror front-back). With the stand centred the pattern is symmetrical, so no mirroring is needed.`:'',
+R.stand?`Underside: the pockets are drawn as seen from the top, through the board. Cut them first, then flip the board and cut the top. In your CAM, mirror the pocket layer the same way you flip the board (left-right flip: mirror left-right; front-back flip: mirror front-back). With the stand centred the pattern is symmetrical, so no mirroring is needed. Or use the ready-made sets: -top files (everything cut from the face) and -underside files (already mirrored left to right for a side-to-side flip, with the outline and through-cuts for lining up).`:'',
 s.fix&&s.pocket?`Fixing pockets: ${L(s.pocketD)} diameter, ${L(s.pocketDepth)} deep, from the top (layer ${pocketLayer(s)}). Cut the pockets before drilling through.`:'',
 R.plain?'':`Total Vee length: ${num(R.grooveLen/1000,2)} m`,
 R.plain?'Origin: front-left corner.':`Drill the holes first, then cut the Vees. Origin: front-left corner.`,''].filter((l,i,a)=>l!==''||i===a.length-1).join('\n');
@@ -1490,11 +1520,12 @@ function render(){
   R=compute(S);
   $('example').innerHTML=S.stand?'<b>Centipede stand top.</b> The dashed shapes are 5 mm deep pockets on the underside. They sit over the six heads of a 2′ × 4′ stand.':(isExample()&&!vees)?'<b>Example: a plain dog-hole top.</b> 77 holes on 96 mm centres, 71 mm in from every edge, with no Vee grid.':isExample()?'<b>Example top.</b> 16 × 10 cells on a 1102 × 718 mm sheet, with 77 dog holes on 96 mm centres, 71 mm in from every edge.':`<b>${S.mode==='sheet'?'Fitted to your sheet':'Built from your grid'}.</b> Change any setting and the drawing updates.`;
   const notes=$('notes');notes.textContent='';
-  if(R.fatal){$('preview').innerHTML='';$('kpis').innerHTML='';$('details').innerHTML='';notes.append(noteEl({level:'error',text:R.fatal}));for(const id of ['dlDxf','dlSvg','dlPdf','dlZip'])$(id).disabled=true;return}
+  if(R.fatal){$('sidesBox').hidden=true;$('preview').innerHTML='';$('kpis').innerHTML='';$('details').innerHTML='';notes.append(noteEl({level:'error',text:R.fatal}));for(const id of ['dlDxf','dlSvg','dlPdf','dlZip'])$(id).disabled=true;return}
   const ns=notesFor(R),blocked=ns.some(n=>n.level==='error');
   for(const n of ns)notes.append(noteEl(n));
-  $('preview').innerHTML=previewSVG(R);syncView();$('fname').placeholder=autoName();
-  for(const id of ['dlDxf','dlSvg','dlZip'])$(id).disabled=blocked;$('dlPdf').disabled=blocked||!window.jspdf;
+  showPreview();$('fname').placeholder=autoName();
+  for(const id of ['dlDxf','dlSvg','dlZip'])$(id).disabled=blocked;
+  $('sidesBox').hidden=!R.stand;$('dlPdf').disabled=blocked||!window.jspdf;
   const fits=(R.W<=2440&&R.D<=1220)||(R.W<=1220&&R.D<=2440);
   const kp=[
     ['Table',`${L(R.W,true)} × ${L(R.D,true)}`,`${S.t} mm sheet${fits?'':', bigger than 8×4'}`],
@@ -1546,9 +1577,21 @@ function save(filename,data,kind){
   a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);
   say(`Saved ${filename}.`);
 }
-$('dlZip').onclick=()=>{const n=baseName();save(n+'.zip',makeZip([{name:n+'.dxf',data:exportDXF(R)},{name:n+'.svg',data:exportSVG(R)},{name:n+'-notes.txt',data:notesTXT(R)}]),'vectors')};
-$('dlDxf').onclick=()=>save(baseName()+'.dxf',exportDXF(R),'vectors');
-$('dlSvg').onclick=()=>save(baseName()+'.svg',exportSVG(R),'vectors');
+const SIDE_SUFFIX={both:'',top:'-top',under:'-underside'};
+// The preview follows the side picked for the vector files.
+const SIDE_BADGE={top:'Top only: no stand pockets',under:'Underside: turned over side to side'};
+function showPreview(){
+  if(!R||R.fatal)return;const sd=sideChoice();
+  $('preview').innerHTML=previewSVG(forSide(R,sd));syncView();
+  const b=$('sideBadge');b.hidden=!SIDE_BADGE[sd];b.textContent=SIDE_BADGE[sd]||'';
+  $('legStand').hidden=!R.stand||sd==='top';
+}
+for(const el of document.querySelectorAll('input[name="sides"]'))el.addEventListener('change',e=>{e.stopPropagation();showPreview()});
+$('dlZip').onclick=()=>{const n=baseName(),sides=R.stand?['both','top','under']:['both'],files=[];
+  for(const sd of sides){const V=forSide(R,sd),m=n+SIDE_SUFFIX[sd];files.push({name:m+'.dxf',data:exportDXF(V)},{name:m+'.svg',data:exportSVG(V)})}
+  files.push({name:n+'-notes.txt',data:notesTXT(R)});save(n+'.zip',makeZip(files),'vectors')};
+$('dlDxf').onclick=()=>{const sd=sideChoice();save(baseName()+SIDE_SUFFIX[sd]+'.dxf',exportDXF(forSide(R,sd)),'vectors')};
+$('dlSvg').onclick=()=>{const sd=sideChoice();save(baseName()+SIDE_SUFFIX[sd]+'.svg',exportSVG(forSide(R,sd)),'vectors')};
 $('dlPdf').onclick=()=>{try{save(baseName()+'-cutting-sheets.pdf',makePDF(R),'pdf')}catch(e){say('Could not build the PDF. Try again, or use the SVG.')}};
 
 /* ---------- printable cutting sheets (A4 landscape PDF) ---------- */
@@ -1890,7 +1933,7 @@ const INFO={
   stand:{t:'Centipede stand pockets',b:`<p>Pockets cut into the <b>underside</b> of the top so it drops over the heads of a folding Centipede stand and can't slide off.</p>${fig(D_STAND,'Six pockets, 5 mm deep, on the underside. Head centres are 604 mm apart across and 605 mm along.')}<ul><li><b>Fits the 2′ × 4′ stand with 6 heads.</b> Other stand sizes aren't available.</li><li>Switching this on sets the top to <b>1320 × 700 mm</b> (landscape) with the stand centred. You can then change the size freely.</li><li><b>Stand runs</b>: side to side (landscape, the default) or front to back under the top.</li><li><b>Stand position</b>: Centred, or Custom to move the stand and give one end or side more overhang. Custom positions are measured from the left and front edges to the nearest head centres.</li><li><b>Allow dog holes over the stand heads</b>: off by default, so any dog hole over a pocket is left out. If you allow them, a dog or clamp pushed right through can hit the stand head below and lift or shift the top. Use short dogs there.</li><li>The Vee grid can run over the pockets. On 18 mm sheet, 9 mm of board is left between a Vee and a pocket.</li></ul><h3>Cutting the underside</h3><ol><li>Cut the underside pockets first.</li><li>Turn the board over and cut the top features and the outline.</li></ol><p>The pockets are drawn as seen from the top, on their own layer. In your CAM, mirror that layer the same way you turn the board over: left to right, or front to back. With the stand centred the pattern is symmetrical, so no mirroring is needed. The PDF has an Underside page already turned over, for marking out by hand.</p>`},
   edges:{t:'Edges & material',b:`${fig(D_EDGES,'Corner shapes')}<ul><li><b>Square, Radius, Chamfer</b>: the shape of the table's corners, with the size you set.</li></ul>${fig(D_SHARP,'A V-bit running along a line leaves a rounded outside corner. A small V-carve square makes it sharp.')}<ul><li><b>Sharp outer corners</b>: adds an 8 mm square at each outside corner of the Vee lines. Run a V-Carve toolpath on that layer with the same 90° bit.</li></ul>${fig(D_HANDLE,'Handle slot')}<ul><li><b>Handle slot</b>: a 110 × 25 mm slot, 35 mm in from the edge, centred. Dog holes and Vees in the way are left out.</li></ul>${fig(D_RUN,'Vees stopping at the outer frame, or running through the edges')}<ul><li><b>Run Vees through the edges</b>: easier when cutting with a router and fence.</li><li><b>Sheet thickness</b>: 18 or 22 mm. Used for the depth checks in the notes.</li></ul>`},
   preview:{t:'The preview',b:`<p>A live top view of your table, drawn to scale.</p><ul><li><b>Zoom</b>: scroll, pinch, double-click, or the + and − buttons. The corner button fits the whole table again.</li><li><b>Move around</b>: drag, or use the arrow keys after clicking the preview.</li><li><b>Position readout</b>: shows where the pointer is, measured from the front-left corner.</li><li>Dashed purple shapes are pockets on the <b>underside</b>. Dashed orange squares are the corner V-carves.</li></ul>`},
-  downloads:{t:'Downloads',b:`<ul><li><b>Download DXF</b> and <b>SVG</b>: vector files for VCarve or other CAM software, in the units you picked. Each feature is on its own layer: OUTLINE, V_GROOVES, V_CORNERS, DOG_HOLES, HANDLES, FIXINGS, fixing pockets, and UNDERSIDE_STAND_POCKETS_5MM_DEEP.</li><li><b>Cutting sheets (PDF)</b>: printable pages for marking out with hand tools: a specification page, then a diagram for each feature with every position measured from the front-left corner.</li><li><b>All files (.zip)</b>: the DXF, the SVG and a notes file together.</li><li><b>File name</b>: leave it empty for an automatic name, or type your own.</li></ul><p>No toolpaths or G-code are made. Check every size before cutting.</p>`}
+  downloads:{t:'Downloads',b:`<ul><li><b>Download DXF</b> and <b>SVG</b>: vector files for VCarve or other CAM software, in the units you picked. Each feature is on its own layer: OUTLINE, V_GROOVES, V_CORNERS, DOG_HOLES, HANDLES, FIXINGS, fixing pockets, and UNDERSIDE_STAND_POCKETS_5MM_DEEP.</li><li><b>Vector files for</b> (only shown with stand pockets on): <b>Both sides</b> puts everything in one file, with the pockets drawn as seen from the top, for CAM software that handles two-sided jobs. <b>Top</b> leaves the pockets out. <b>Underside</b> is drawn as the board looks once turned over side to side (mirrored left to right). It has the pockets, plus the outline, holes and handle slot so you can line the sheet up.</li><li><b>Cutting sheets (PDF)</b>: printable pages for marking out with hand tools: a specification page, then a diagram for each feature with every position measured from the front-left corner.</li><li><b>All files (.zip)</b>: the DXF, the SVG and a notes file together. With stand pockets on, it has all three sets: both sides, -top and -underside.</li><li><b>File name</b>: leave it empty for an automatic name, or type your own.</li></ul><p>No toolpaths or G-code are made. Check every size before cutting.</p>`}
 };
 function showInfo(k){
   const it=INFO[k];if(!it)return;
